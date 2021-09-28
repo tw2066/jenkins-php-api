@@ -19,7 +19,7 @@ If your Jenkins needs authentication, you need to pass a URL like this : `'http:
 
 
 There are always two ways to instanciate an item and get the data you want:
- 
+
 1. Use the classes directly (`new Job('myjob', $jenkins)`). In this case you have to instanciate Jenkins first and pass it as second constructor argument.
 2. Use methods of Jenkins: `(new Jenkins('myurl'))->getJob('myjob')`
 
@@ -45,7 +45,19 @@ Will launch the job and wait until the job is finished
 ```php
     $job = $jenkins->getJob("clone-deploy")->launchAndWait();
 ```
+Build a Job
+------------
 
+Will build the job and return imidiatly
+```php
+    $queueReference = $jenkins->getJob("clone-deploy")->build();
+```
+
+Will build the job and wait until the job is finished
+```php
+    $queueReference = $jenkins->getJob("clone-deploy")->build();
+    $build = $jenkins->wait($queueReference);
+```
 
 List the jobs of a given view
 -----------------------------

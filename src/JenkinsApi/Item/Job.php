@@ -5,6 +5,7 @@ use DOMDocument;
 use JenkinsApi\AbstractItem;
 use JenkinsApi\Exceptions\JenkinsApiException;
 use JenkinsApi\Exceptions\JobNotFoundException;
+use JenkinsApi\Exceptions\WaitTimeoutException;
 use JenkinsApi\Jenkins;
 use RuntimeException;
 
@@ -248,4 +249,45 @@ class Job extends AbstractItem
     {
         return $this->_jobName;
     }
+
+    /**
+     * @param array $parameters
+     * @return QueueReference
+     */
+    public function build($parameters = array())
+    {
+        if (empty($parameters)) {
+            return $this->_jenkins->postBuild(sprintf('job/%s/build', rawurlencode($this->_jobName)));
+        } else {
+            return $this->_jenkins->postBuild(sprintf('job/%s/buildWithParameters', rawurlencode($this->_jobName)), $parameters);
+        }
+    }
+
+    /**
+     * @param QueueReference $queueReference
+     * @param int $timeoutSeconds
+     * @param int $checkIntervalSeconds
+     * @return Build
+     * @throws WaitTimeoutException
+     */
+    public function wait(QueueReference $queueReference, $timeoutSeconds = 60, $checkIntervalSeconds = 1)
+    {
+        $propertyName = 'executable';
+        $queueReference->refresh();
+        $startTime = time();
+        while (!$queueReference->get($propertyName)) {
+            if (time() > $startTime + $timeoutSeconds) {
+                throw new WaitTimeoutException(sprintf('Error wait timeout job %s on %s', $this->_jobName, $queueReference->getUrl()));
+            }
+            sleep($checkIntervalSeconds);
+            $queueReference->refresh();
+        }
+        $number = $queueReference->get($propertyName)->number;
+        $build = $this->getBuild($number);
+        while ($build->isBuilding()) {
+            sleep($checkIntervalSeconds);
+        }
+        return $this->getBuild($number);
+    }
+
 }

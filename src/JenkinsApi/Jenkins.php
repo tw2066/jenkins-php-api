@@ -19,6 +19,7 @@ use JenkinsApi\Item\Job;
 use JenkinsApi\Item\LastBuild;
 use JenkinsApi\Item\Node;
 use JenkinsApi\Item\Queue;
+use JenkinsApi\Item\QueueReference;
 use JenkinsApi\Item\View;
 use RuntimeException;
 use stdClass;
@@ -239,6 +240,67 @@ class Jenkins
 
         return (curl_errno($curl)) ?: $return;
     }
+
+    /**
+     * @param string $url
+     * @param array|string $parameters
+     * @param array $curlOpts
+     *
+     * @return QueueReference
+     * @throws RuntimeException
+     */
+    public function postBuild($url, $parameters = [], array $curlOpts = [])
+    {
+        $url = sprintf('%s', $this->_baseUrl) . $url;
+
+        $curl = curl_init($url);
+        if ($curlOpts) {
+            curl_setopt_array($curl, $curlOpts);
+        }
+        curl_setopt($curl, CURLOPT_POST, 1);
+        if (is_array($parameters)) {
+            $parameters = http_build_query($parameters);
+        }
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $parameters);
+
+        if ($this->_username) {
+            curl_setopt($curl, CURLOPT_USERPWD, $this->_username . ":" . $this->_password);
+        }
+
+        $headers = (isset($curlOpts[CURLOPT_HTTPHEADER])) ? $curlOpts[CURLOPT_HTTPHEADER] : array();
+
+        if ($this->areCrumbsEnabled()) {
+            $headers[] = $this->getCrumbHeader();
+        }
+
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+        $location = null;
+        curl_setopt($curl, CURLOPT_HEADERFUNCTION, function ($curl, $headerLine) use (&$location) {
+            $len = strlen($headerLine);
+            $split = explode(':', $headerLine, 2);
+            if (count($split) > 1) {
+                $key = trim($split[0]);
+                if (strtolower($key) == 'location') {
+                    $location = trim($split[1]);
+                }
+            }
+            return $len;
+        });
+        $return = curl_exec($curl);
+
+        $response_info = curl_getinfo($curl);
+        if ($return === false || $response_info['http_code'] >= 300) {
+            throw new \Exception(
+                sprintf(
+                    'build failures, url: %s (Response: %s)', $url, $response_info['http_code']
+                )
+            );
+        }
+        return new QueueReference($this, $location);
+    }
+
 
     /**
      * @return boolean
