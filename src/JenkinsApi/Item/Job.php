@@ -270,7 +270,7 @@ class Job extends AbstractItem
      * @return Build
      * @throws WaitTimeoutException
      */
-    public function wait(QueueReference $queueReference, $timeoutSeconds = 60, $checkIntervalSeconds = 1)
+    public function wait(QueueReference $queueReference, $timeoutSeconds = 3600, $checkIntervalSeconds = 1)
     {
         $propertyName = 'executable';
         $queueReference->refresh();
@@ -285,6 +285,9 @@ class Job extends AbstractItem
         $number = $queueReference->get($propertyName)->number;
         $build = $this->getBuild($number);
         while ($build->isBuilding()) {
+            if (time() > $startTime + $timeoutSeconds) {
+                throw new WaitTimeoutException(sprintf('Error building timeout job %s on %s', $this->_jobName, $queueReference->getUrl()));
+            }
             sleep($checkIntervalSeconds);
         }
         return $this->getBuild($number);
